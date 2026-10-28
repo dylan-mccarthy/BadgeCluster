@@ -48,7 +48,7 @@ tenant_id=$(az account show --subscription "$subscription" --query tenantId --ou
 az identity federated-credential create --subscription "$subscription" --resource-group "$resource_group" \
   --identity-name "$identity_name" --name github-production \
   --issuer https://token.actions.githubusercontent.com \
-  --subject "repo:$repository:ref:refs/heads/main" \
+  --subject "repo:dylan-mccarthy@61097819/BadgeCluster@1437308724:ref:refs/heads/main" \
   --audiences api://AzureADTokenExchange --output none
 scope="/subscriptions/$subscription/resourceGroups/$resource_group"
 # Contributor deploys the app/storage. RBAC Administrator is required only

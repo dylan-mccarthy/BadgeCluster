@@ -73,7 +73,7 @@ class DeploymentScripts(unittest.TestCase):
             AZURE_SUBSCRIPTION_ID=SUB, AZURE_RESOURCE_GROUP='badgecluster'))
         az = self.commands('az')
         federation = next(row['args'] for row in az if row['args'][:3] == ['identity', 'federated-credential', 'create'])
-        self.assertEqual(federation[federation.index('--subject')+1], 'repo:dylan-mccarthy/BadgeCluster:ref:refs/heads/main')
+        self.assertEqual(federation[federation.index('--subject')+1], 'repo:dylan-mccarthy@61097819/BadgeCluster@1437308724:ref:refs/heads/main')
         self.assertIn('api://AzureADTokenExchange', federation)
         roles = [row['args'] for row in az if row['args'][:3] == ['role', 'assignment', 'create']]
         self.assertEqual(len(roles), 2)

@@ -15,12 +15,14 @@ A user-assigned Azure managed identity, `badgecluster-github`, trusts GitHub
 OIDC tokens only for the exact subject:
 
 ```text
-repo:dylan-mccarthy/BadgeCluster:ref:refs/heads/main
+repo:dylan-mccarthy@61097819/BadgeCluster@1437308724:ref:refs/heads/main
 ```
 
 Issuer: `https://token.actions.githubusercontent.com`.
 Audience: `api://AzureADTokenExchange`.
-The federated credential is named `github-production`.
+The federated credential is named `github-production`. This is the subject
+observed in the real GitHub Actions token; GitHub includes immutable owner
+and repository IDs in this repository’s subject format.
 
 The workflow uses the `main` branch subject directly, without a GitHub
 Environment. This was selected because the GitHub connection permits source
