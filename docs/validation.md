@@ -23,3 +23,18 @@ script writes desktop/mobile previews to `artifacts/`, which is Git-ignored.
 CI validates the API against Azurite, builds the publish artifact and compiles
 Bicep. Azure managed identity, role propagation, App Service runtime support
 and event Wi-Fi/proxy behavior must still be tested in the chosen subscription.
+
+## GitHub OIDC deployment automation
+
+- `actionlint` 1.7.7 passes for CI and the manual deployment workflow.
+- All shell scripts pass Bash syntax checks.
+- Twelve deployment-script tests run the real shell scripts with recorded fake
+  Azure/GitHub/curl CLIs, checking environment variables, exact OIDC subject,
+  resource-group-scoped roles, reruns, missing permissions, branch policies,
+  input validation and bounded readiness checks. These are automated script
+  tests, not proof of a successful Azure login or deployment.
+- GitHub's integration returned HTTP 403 for environments and Actions
+  variables. No production environment/variables were created by this session.
+- No Azure identity is configured in this workspace. The supplied subscription
+  and Australia East selection require `bootstrap-azure.sh` under an
+  authenticated Azure session, then GitHub production configuration.

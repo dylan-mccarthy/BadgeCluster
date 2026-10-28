@@ -1,0 +1,126 @@
+name: Deploy to Azure
+run-name: Azure production · ${{ inputs.operation }} · ${{ github.ref_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Preview infrastructure changes or deploy infrastructure and app
+        type: choice
+        options: [deploy, preview]
+        default: deploy
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: badgecluster-production
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Test and package
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      storage:
+        image: mcr.microsoft.com/azure-storage/azurite:3.35.0
+        ports:
+          - 10000:10000
+          - 10001:10001
+          - 10002:10002
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require main
+        run: test "$GITHUB_REF" = refs/heads/main
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Test deployment scripts
+        run: python3 -m unittest discover -s tests -p 'test_deployment_scripts.py'
+      - name: Test API against Table Storage emulator
+        run: dotnet test tests/BadgeCluster.Api.Tests --configuration Release
+      - name: Validate infrastructure
+        run: az bicep build --file infra/main.bicep --outfile "$RUNNER_TEMP/template.json"
+      - name: Publish API and dashboard
+        if: inputs.operation == 'deploy'
+        run: dotnet publish src/BadgeCluster.Api --configuration Release --no-restore --output artifacts/publish
+      - name: Package published files
+        if: inputs.operation == 'deploy'
+        working-directory: artifacts/publish
+        run: zip -q -r ../badgecluster.zip .
+      - uses: actions/upload-artifact@v4
+        if: inputs.operation == 'deploy'
+        with:
+          name: deployment-package
+          path: artifacts/badgecluster.zip
+          retention-days: 7
+          if-no-files-found: error
+
+  deploy:
+    name: Azure production
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: production
+      url: ${{ steps.infrastructure.outputs.app_url }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      APP_SERVICE_SKU: ${{ vars.AZURE_APP_SERVICE_SKU || 'B1' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate configuration
+        run: bash scripts/check-deployment-config.sh
+      - name: Sign in using short-lived GitHub OIDC credentials
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Preview infrastructure
+        if: inputs.operation == 'preview'
+        run: |
+          az deployment group what-if \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --template-file infra/main.bicep \
+            --parameters sku="$APP_SERVICE_SKU"
+      - name: Apply infrastructure
+        if: inputs.operation == 'deploy'
+        id: infrastructure
+        run: |
+          az deployment group create \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "badgecluster-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --mode Incremental \
+            --template-file infra/main.bicep \
+            --parameters sku="$APP_SERVICE_SKU" \
+            --query properties.outputs --output json > "$RUNNER_TEMP/outputs.json"
+          app_name=$(jq -er '.deployedAppName.value' "$RUNNER_TEMP/outputs.json")
+          app_url=$(jq -er '.appUrl.value' "$RUNNER_TEMP/outputs.json")
+          printf 'app_name=%s\napp_url=%s\n' "$app_name" "$app_url" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        if: inputs.operation == 'deploy'
+        with:
+          name: deployment-package
+          path: artifacts
+      - name: Deploy API and dashboard
+        if: inputs.operation == 'deploy'
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ steps.infrastructure.outputs.app_name }}
+          package: artifacts/badgecluster.zip
+      - name: Check storage readiness
+        if: inputs.operation == 'deploy'
+        env:
+          APP_URL: ${{ steps.infrastructure.outputs.app_url }}
+        run: |
+          bash scripts/check-readiness.sh "$APP_URL"
+          printf '### BadgeCluster deployed\n\n[Open dashboard](%s)\n\nStorage readiness check passed.\n' "$APP_URL" >> "$GITHUB_STEP_SUMMARY"

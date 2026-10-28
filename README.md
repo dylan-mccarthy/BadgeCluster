@@ -10,6 +10,14 @@ Azure Table Storage and managed-identity access. Badge code lives separately
 in [dylan-mccarthy/badger](https://github.com/dylan-mccarthy/badger), under
 `badge/apps/badgecluster/`.
 
+## Deploy from GitHub
+
+Use [Deploy to Azure](https://github.com/dylan-mccarthy/BadgeCluster/actions/workflows/deploy.yml)
+on `main` after the [one-time OIDC setup](docs/deployment.md).
+The workflow tests, previews or provisions infrastructure, deploys the API and
+dashboard, and checks storage readiness. The selected region is Australia East.
+No Azure password, publish profile or storage key is stored in GitHub.
+
 ## Run locally
 
 Install .NET 10 SDK and Azurite (`npm install -g azurite`). In one terminal:
@@ -71,7 +79,7 @@ with no queue. These initial quotas are code constants. 400 means malformed
 input, 409 means counter/quota conflict, 429 means rate limited, and 503 means
 storage unavailable or timeout. Clients should back off on 429/503.
 
-## Azure App Service
+## Manual Azure deployment alternative
 
 Review the Bicep template and costs first. It creates a paid Linux App Service
 plan (B1 default), a .NET 10 web app with HTTPS only, a StorageV2 account and
@@ -81,7 +89,7 @@ resource and role-assignment permissions, choosing your subscription explicitly.
 
 ```sh
 az account set --subscription '<subscription-id>'
-az group create --name badgecluster --location eastus
+az group create --name badgecluster --location australiaeast
 az deployment group what-if --resource-group badgecluster --template-file infra/main.bicep
 az deployment group create --resource-group badgecluster --template-file infra/main.bicep
 ```

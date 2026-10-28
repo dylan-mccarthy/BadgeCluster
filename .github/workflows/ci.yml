@@ -17,6 +17,10 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - name: Test deployment scripts without cloud access
+        run: python3 -m unittest discover -s tests -p 'test_deployment_scripts.py'
+      - name: Check shell syntax
+        run: for script in scripts/*.sh; do bash -n "$script"; done
       - run: dotnet test tests/BadgeCluster.Api.Tests --configuration Release
       - run: dotnet publish src/BadgeCluster.Api --configuration Release --output artifacts/publish
       - run: az bicep build --file infra/main.bicep --outfile /tmp/badgecluster-template.json
