@@ -12,10 +12,14 @@ in [dylan-mccarthy/badger](https://github.com/dylan-mccarthy/badger), under
 
 ## Deploy from GitHub
 
+Live dashboard: **https://badgecluster-37nlkk2a4ucny.azurewebsites.net**.
+
 Use [Deploy to Azure](https://github.com/dylan-mccarthy/BadgeCluster/actions/workflows/deploy.yml)
 on `main` after the [one-time OIDC setup](docs/deployment.md).
 The workflow tests, previews or provisions infrastructure, deploys the API and
 dashboard, and checks storage readiness. The selected region is Australia East.
+Azure trusts GitHub runs from `main` directly. Nonsecret deployment IDs live
+in `infra/deployment.json`; no GitHub environment settings are required.
 No Azure password, publish profile or storage key is stored in GitHub.
 
 ## Run locally
@@ -105,8 +109,8 @@ az webapp deploy --resource-group badgecluster --name '<deployedAppName>' --src-
 Managed identity role assignments can take several minutes to propagate; wait
 and restart the app if startup fails during propagation. Verify `/health/ready`,
 submit a sample, restart App Service, then confirm the sample remains counted.
-The infrastructure has been authored for deployment; creating cloud resources
-is a separate step. This workspace does not contain a production deployment.
+The initial App Service deployment is live in Australia East. Use the GitHub
+workflow for subsequent deployments; the commands above are an alternative.
 
 ## Operational limits and remaining work
 

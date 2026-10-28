@@ -27,17 +27,6 @@ if name == 'az':
         print(json.dumps(dict(clientId='11111111-1111-4111-8111-111111111111', principalId='33333333-3333-4333-8333-333333333333')))
     elif args[:3] == ['role', 'assignment', 'list']:
         print('existing-role' if os.environ.get('EXISTING_ROLES') == '1' else '')
-elif name == 'gh':
-    if args and args[0] == 'api' and os.environ.get('GITHUB_DENIED') == '1':
-        print('gh: Resource not accessible by integration (HTTP 403)', file=sys.stderr)
-        sys.exit(1)
-    if args and args[0] == 'api' and any(arg.endswith('/environments/production') for arg in args) and '--method' not in args:
-        if os.environ.get('ENVIRONMENT_MISSING') == '1':
-            print('gh: Not Found (HTTP 404)', file=sys.stderr)
-            sys.exit(1)
-        print('custom')
-    if '--jq' in args and 'select(.name !='  in args[-1] and os.environ.get('EXTRA_BRANCH'):
-        print('another-branch')
 elif name == 'curl':
     counter = pathlib.Path(os.environ['CLI_LOG'] + '.curl-count')
     count = int(counter.read_text()) if counter.exists() else 0
@@ -58,7 +47,7 @@ class DeploymentScripts(unittest.TestCase):
         self.config = self.directory / 'bootstrap.json'
         self.bin = self.directory / 'bin'
         self.bin.mkdir()
-        for command in ('az', 'gh', 'curl', 'sleep'):
+        for command in ('az', 'curl', 'sleep'):
             path = self.bin / command
             path.write_text(FAKE_CLI)
             path.chmod(0o755)
@@ -84,7 +73,7 @@ class DeploymentScripts(unittest.TestCase):
             AZURE_SUBSCRIPTION_ID=SUB, AZURE_RESOURCE_GROUP='badgecluster'))
         az = self.commands('az')
         federation = next(row['args'] for row in az if row['args'][:3] == ['identity', 'federated-credential', 'create'])
-        self.assertEqual(federation[federation.index('--subject')+1], 'repo:dylan-mccarthy/BadgeCluster:environment:production')
+        self.assertEqual(federation[federation.index('--subject')+1], 'repo:dylan-mccarthy/BadgeCluster:ref:refs/heads/main')
         self.assertIn('api://AzureADTokenExchange', federation)
         roles = [row['args'] for row in az if row['args'][:3] == ['role', 'assignment', 'create']]
         self.assertEqual(len(roles), 2)
@@ -120,29 +109,8 @@ class DeploymentScripts(unittest.TestCase):
                        dict(AZURE_SUBSCRIPTION_ID='invalid'), dict(APP_SERVICE_SKU='F1')):
             self.assertNotEqual(self.run_script('check-deployment-config.sh', **dict(settings, **change)).returncode, 0)
 
-    def test_github_setup_writes_only_four_nonsecret_environment_variables(self):
-        self.assertEqual(self.bootstrap().returncode, 0)
-        result = self.run_script('configure-github.sh', str(self.config))
-        self.assertEqual(result.returncode, 0, result.stderr)
-        commands = self.commands('gh')
-        variables = [row['args'] for row in commands if row['args'][:2] == ['variable', 'set']]
-        self.assertEqual({args[2] for args in variables}, set(json.loads(self.config.read_text())))
-        self.assertTrue(all(args[args.index('--env')+1] == 'production' for args in variables))
-        branch = next(row for row in commands if '--method' in row['args'] and 'POST' in row['args'])
-        self.assertEqual(json.loads(branch['body']), dict(name='main', type='branch'))
-        self.assertFalse(any(row['args'][:2] == ['secret', 'set'] for row in commands))
 
-    def test_github_permission_failure_does_not_write_variables(self):
-        self.assertEqual(self.bootstrap().returncode, 0)
-        result = self.run_script('configure-github.sh', str(self.config), GITHUB_DENIED='1')
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('403', result.stderr)
-        self.assertFalse(any(row['args'][:2] == ['variable', 'set'] for row in self.commands('gh')))
 
-    def test_existing_extra_branch_policy_blocks_setup(self):
-        result = self.run_script('configure-github-environment.sh', EXTRA_BRANCH='1')
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('additional branch/tag policies', result.stderr)
 
     def test_readiness_retries_transient_failure_and_requires_ready_json(self):
         result = self.run_script('check-readiness.sh', 'https://badgecluster-example.azurewebsites.net')
@@ -155,18 +123,44 @@ class DeploymentScripts(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(len(self.commands('curl')), 24)
 
-    def test_new_github_environment_gets_explicit_branch_policy(self):
-        result = self.run_script('configure-github-environment.sh', ENVIRONMENT_MISSING='1')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        creation = next(row for row in self.commands('gh') if 'PUT' in row['args'])
-        self.assertEqual(json.loads(creation['body']), dict(deployment_branch_policy=dict(
-            protected_branches=False, custom_branch_policies=True)))
 
     def test_readiness_rejects_other_origins(self):
         result = self.run_script('check-readiness.sh', 'http://example.com')
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.commands('curl'), [])
 
+
+    def load_config(self, settings):
+        self.config.write_text(json.dumps(settings))
+        return subprocess.run(['python3', 'scripts/load-deployment-config.py', str(self.config)],
+                              cwd=ROOT, env=dict(self.env, GITHUB_ENV=str(self.directory/'env'),
+                                                GITHUB_OUTPUT=str(self.directory/'outputs')),
+                              capture_output=True, text=True)
+
+    def test_loader_sets_runner_environment_and_action_outputs(self):
+        self.assertEqual(self.bootstrap().returncode, 0)
+        settings=json.loads(self.config.read_text())
+        result=self.load_config(settings)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('AZURE_CLIENT_ID='+CLIENT, (self.directory/'env').read_text())
+        self.assertIn('azure_subscription_id='+SUB, (self.directory/'outputs').read_text())
+
+    def test_loader_rejects_injected_newlines_before_writing_outputs(self):
+        self.assertEqual(self.bootstrap().returncode, 0)
+        settings=json.loads(self.config.read_text())
+        settings['AZURE_CLIENT_ID']=CLIENT+'\nOTHER=bad'
+        result=self.load_config(settings)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.directory/'env').exists())
+
+    def test_loader_rejects_unknown_keys(self):
+        self.assertEqual(self.bootstrap().returncode, 0)
+        settings=json.loads(self.config.read_text())
+        settings['unexpected']='value'
+        self.assertNotEqual(self.load_config(settings).returncode, 0)
+
+    def test_loader_rejects_missing_identifiers(self):
+        self.assertNotEqual(self.load_config({}).returncode, 0)
 
 if __name__ == '__main__':
     unittest.main()

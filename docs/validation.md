@@ -26,15 +26,20 @@ and event Wi-Fi/proxy behavior must still be tested in the chosen subscription.
 
 ## GitHub OIDC deployment automation
 
-- `actionlint` 1.7.7 passes for CI and the manual deployment workflow.
-- All shell scripts pass Bash syntax checks.
-- Twelve deployment-script tests run the real shell scripts with recorded fake
-  Azure/GitHub/curl CLIs, checking environment variables, exact OIDC subject,
-  resource-group-scoped roles, reruns, missing permissions, branch policies,
-  input validation and bounded readiness checks. These are automated script
-  tests, not proof of a successful Azure login or deployment.
-- GitHub's integration returned HTTP 403 for environments and Actions
-  variables. No production environment/variables were created by this session.
-- No Azure identity is configured in this workspace. The supplied subscription
-  and Australia East selection require `bootstrap-azure.sh` under an
-  authenticated Azure session, then GitHub production configuration.
+- `actionlint` passes CI and the manual deployment workflow; Bash scripts pass
+  syntax checks. Twelve script/configuration tests pass, exercising exact
+  branch-bound OIDC trust, group-scoped roles, reruns, identifier validation,
+  runner output safety and bounded readiness retries with fake external CLIs.
+- GitHub returned HTTP 403 on environment-administration writes even after
+  CLI login. The workflow therefore uses the exact `main` branch OIDC subject
+  and checked-in nonsecret identifiers, without requiring GitHub environments.
+- Azure CLI device login succeeded. Resource group `badgecluster`, managed
+  identity, federated credential and scoped roles were created in Australia East.
+- Azure deployment what-if and provider validation succeeded. The B1 App Service,
+  storage account, table and app storage role were provisioned. The published
+  Release package deployed successfully.
+- Live HTTPS checks pass: `/health/ready` returns `ready`, the dashboard returns
+  its expected content, and `/api/v1/cluster` starts with zero samples/null pi.
+  No synthetic samples were added to production storage.
+- The first GitHub OIDC deployment run is the remaining verification for this
+  branch-bound workflow; live badge networking and battery checks remain separate.

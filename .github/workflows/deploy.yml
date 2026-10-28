@@ -60,31 +60,28 @@ jobs:
 
   deploy:
     name: Azure production
+    if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    environment:
-      name: production
-      url: ${{ steps.infrastructure.outputs.app_url }}
     permissions:
       contents: read
       id-token: write
     env:
-      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
       APP_SERVICE_SKU: ${{ vars.AZURE_APP_SERVICE_SKU || 'B1' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Load nonsecret deployment configuration
+        id: configuration
+        run: python3 scripts/load-deployment-config.py
       - name: Validate configuration
         run: bash scripts/check-deployment-config.sh
       - name: Sign in using short-lived GitHub OIDC credentials
         uses: azure/login@v2
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ steps.configuration.outputs.azure_client_id }}
+          tenant-id: ${{ steps.configuration.outputs.azure_tenant_id }}
+          subscription-id: ${{ steps.configuration.outputs.azure_subscription_id }}
       - name: Preview infrastructure
         if: inputs.operation == 'preview'
         run: |

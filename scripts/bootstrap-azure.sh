@@ -5,7 +5,7 @@ subscription=''
 location=''
 resource_group=badgecluster
 repository=dylan-mccarthy/BadgeCluster
-output=artifacts/azure-bootstrap.json
+output=infra/deployment.json
 usage() {
   printf 'Usage: bash scripts/bootstrap-azure.sh --subscription UUID --location REGION [--resource-group NAME] [--output PATH]\n'
 }
@@ -48,7 +48,7 @@ tenant_id=$(az account show --subscription "$subscription" --query tenantId --ou
 az identity federated-credential create --subscription "$subscription" --resource-group "$resource_group" \
   --identity-name "$identity_name" --name github-production \
   --issuer https://token.actions.githubusercontent.com \
-  --subject "repo:$repository:environment:production" \
+  --subject "repo:$repository:ref:refs/heads/main" \
   --audiences api://AzureADTokenExchange --output none
 scope="/subscriptions/$subscription/resourceGroups/$resource_group"
 # Contributor deploys the app/storage. RBAC Administrator is required only
@@ -69,9 +69,9 @@ path.parent.mkdir(parents=True, exist_ok=True)
 settings = dict(zip(('AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID', 'AZURE_RESOURCE_GROUP'), sys.argv[2:]))
 path.write_text(json.dumps(settings, indent=2) + '\n')
 print('Azure OIDC bootstrap complete. No client secret was created.')
-print('Add these variables to GitHub Settings > Environments > production:')
+print('Nonsecret deployment configuration:')
 for key, value in settings.items():
     print(f'  {key}={value}')
 print(f'Configuration saved to {path}. These IDs are not credentials.')
-print(f'If GitHub CLI is authenticated, finish with: bash scripts/configure-github.sh {path}')
+print(f'Commit {path} to main, then open Actions > Deploy to Azure > Run workflow.')
 PY

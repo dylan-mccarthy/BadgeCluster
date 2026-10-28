@@ -7,13 +7,13 @@ if [[ ${GITHUB_REF:-} != refs/heads/main ]]; then
 fi
 for setting in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID AZURE_RESOURCE_GROUP; do
   if [[ -z ${!setting:-} ]]; then
-    printf 'Missing production environment variable: %s. See docs/deployment.md.\n' "$setting" >&2
+    printf 'Missing deployment setting: %s. See infra/deployment.json and docs/deployment.md.\n' "$setting" >&2
     exit 1
   fi
 done
 for setting in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do
   if [[ ! ${!setting} =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
-    printf 'Invalid Azure ID in production environment variable: %s.\n' "$setting" >&2
+    printf 'Invalid Azure ID in deployment setting: %s.\n' "$setting" >&2
     exit 1
   fi
 done
