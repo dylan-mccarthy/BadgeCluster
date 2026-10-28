@@ -8,7 +8,8 @@ ASP.NET Core (.NET 10 LTS) API and read-only dashboard for the Universe 2026
 BadgeCluster experiment. Deploys to **Azure App Service**, with persistent
 Azure Table Storage and managed-identity access. Badge code lives separately
 in [dylan-mccarthy/badger](https://github.com/dylan-mccarthy/badger), under
-`badge/apps/badgecluster/`.
+`badge/apps/badgecluster/`. The current badge work is on `feature/badgecluster`
+pending PR review; see the [badge development handoff](https://github.com/dylan-mccarthy/badger/blob/feature/badgecluster/docs/badgecluster/development.md).
 
 ## Deploy from GitHub
 
@@ -21,6 +22,8 @@ dashboard, and checks storage readiness. The selected region is Australia East.
 Azure trusts GitHub runs from `main` directly. Nonsecret deployment IDs live
 in `infra/deployment.json`; no GitHub environment settings are required.
 No Azure password, publish profile or storage key is stored in GitHub.
+
+For continuing service work, see [docs/development.md](docs/development.md).
 
 ## Run locally
 
